@@ -143,11 +143,66 @@ const Wheel3DView: React.FC<Wheel3DViewProps> = ({ result }) => {
     }
     spokeMeshesRef.current = [];
 
+    const groundObjects: THREE.Object3D[] = [];
+
+    const existingGround = sceneRef.current.children.filter(
+      (c) => c.userData.isGround || c.userData.isGroundLabel
+    );
+    for (const obj of existingGround) {
+      sceneRef.current.remove(obj);
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (obj.material instanceof THREE.Material) {
+          obj.material.dispose();
+        }
+      }
+    }
+
     if (!result) return;
 
     const { parameters, spokeData, maxForce } = result;
     const radius = parameters.wheelRadius;
     const spokeCount = parameters.spokeCount;
+
+    const materialColor = new THREE.Color(result.material.color);
+    const isMetallic = result.material.id === 'iron';
+
+    const groundPlaneGeometry = new THREE.PlaneGeometry(10, 10);
+    const groundColor = new THREE.Color(result.roadCondition.color);
+    const groundPlaneMaterial = new THREE.MeshStandardMaterial({
+      color: groundColor,
+      metalness: 0.1,
+      roughness: 0.9,
+      transparent: true,
+      opacity: 0.6,
+    });
+    const groundPlane = new THREE.Mesh(groundPlaneGeometry, groundPlaneMaterial);
+    groundPlane.rotation.x = -Math.PI / 2;
+    groundPlane.position.y = -1.5;
+    groundPlane.receiveShadow = true;
+    groundPlane.userData.isGround = true;
+    sceneRef.current.add(groundPlane);
+    groundObjects.push(groundPlane);
+
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 512;
+    labelCanvas.height = 64;
+    const ctx = labelCanvas.getContext('2d')!;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, 512, 64);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(result.roadCondition.name, 256, 32);
+    const labelTexture = new THREE.CanvasTexture(labelCanvas);
+    const labelMaterial = new THREE.SpriteMaterial({ map: labelTexture, transparent: true });
+    const labelSprite = new THREE.Sprite(labelMaterial);
+    labelSprite.position.set(0, -1.25, 2.5);
+    labelSprite.scale.set(2, 0.25, 1);
+    labelSprite.userData.isGroundLabel = true;
+    sceneRef.current.add(labelSprite);
+    groundObjects.push(labelSprite);
 
     const hubRadius = radius * 0.12;
     const hubDepth = radius * 0.2;
@@ -158,9 +213,9 @@ const Wheel3DView: React.FC<Wheel3DViewProps> = ({ result }) => {
       32
     );
     const hubMaterial = new THREE.MeshStandardMaterial({
-      color: 0x5a4a3a,
-      metalness: 0.3,
-      roughness: 0.7,
+      color: materialColor,
+      metalness: isMetallic ? 0.6 : 0.2,
+      roughness: isMetallic ? 0.4 : 0.7,
     });
     const hub = new THREE.Mesh(hubGeometry, hubMaterial);
     hub.rotation.x = Math.PI / 2;
@@ -191,9 +246,9 @@ const Wheel3DView: React.FC<Wheel3DViewProps> = ({ result }) => {
       64
     );
     const rimMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a3728,
-      metalness: 0.2,
-      roughness: 0.8,
+      color: materialColor,
+      metalness: isMetallic ? 0.5 : 0.15,
+      roughness: isMetallic ? 0.4 : 0.8,
     });
     const rim = new THREE.Mesh(torusGeometry, rimMaterial);
     rim.rotation.y = Math.PI / 2;
@@ -201,37 +256,52 @@ const Wheel3DView: React.FC<Wheel3DViewProps> = ({ result }) => {
     rim.receiveShadow = true;
     wheelGroup.add(rim);
 
-    const spokeWidth = radius * 0.04;
-    const spokeDepth = radius * 0.03;
+    const spokeWidth3D = parameters.spokeWidth * radius * 25;
+    const spokeHeight3D = parameters.spokeHeight * radius * 25;
 
     for (let i = 0; i < spokeCount; i++) {
       const angle = (2 * Math.PI * i) / spokeCount;
       const spokeInfo = spokeData[i];
       const forceRatio = Math.min(1, spokeInfo.totalForce / maxForce);
+      const damage = spokeInfo.damageAccumulated;
 
-      let spokeColor: number;
-      if (spokeInfo.exceedsThreshold) {
-        spokeColor = 0xff2222;
+      let spokeColor: THREE.Color;
+      let emissiveColor = new THREE.Color(0x000000);
+      let emissiveIntensity = 0;
+
+      if (damage >= 1.0) {
+        spokeColor = new THREE.Color(0xff1111);
+        emissiveColor = new THREE.Color(0xff0000);
+        emissiveIntensity = 0.8;
+      } else if (damage > 0.5) {
+        const t = (damage - 0.5) * 2;
+        spokeColor = materialColor.clone().lerp(new THREE.Color(0xff2222), t * 0.7);
+        emissiveColor = new THREE.Color(0xff0000);
+        emissiveIntensity = t * 0.5;
+      } else if (spokeInfo.exceedsThreshold) {
+        spokeColor = new THREE.Color(0xff2222);
+        emissiveColor = new THREE.Color(0x440000);
+        emissiveIntensity = 0.3;
       } else if (forceRatio > 0.8) {
-        spokeColor = 0xff8800;
+        spokeColor = materialColor.clone().lerp(new THREE.Color(0xff8800), 0.5);
       } else if (forceRatio > 0.5) {
-        spokeColor = 0xffcc00;
+        spokeColor = materialColor.clone().lerp(new THREE.Color(0xffcc00), 0.3);
       } else {
-        spokeColor = 0x8b6914;
+        spokeColor = materialColor.clone();
       }
 
       const spokeLength = radius - hubRadius;
       const spokeGeometry = new THREE.BoxGeometry(
         spokeLength,
-        spokeWidth,
-        spokeDepth
+        spokeWidth3D,
+        spokeHeight3D
       );
       const spokeMaterial = new THREE.MeshStandardMaterial({
         color: spokeColor,
-        metalness: 0.15,
-        roughness: 0.75,
-        emissive: spokeInfo.exceedsThreshold ? 0x440000 : 0x000000,
-        emissiveIntensity: spokeInfo.exceedsThreshold ? 0.3 : 0,
+        metalness: isMetallic ? 0.4 : 0.15,
+        roughness: isMetallic ? 0.5 : 0.75,
+        emissive: emissiveColor,
+        emissiveIntensity: emissiveIntensity,
       });
       const spoke = new THREE.Mesh(spokeGeometry, spokeMaterial);
 
@@ -241,7 +311,7 @@ const Wheel3DView: React.FC<Wheel3DViewProps> = ({ result }) => {
       spoke.castShadow = true;
       spoke.receiveShadow = true;
 
-      spoke.userData = { spokeIndex: i, ...spokeInfo };
+      spoke.userData = { ...spokeInfo };
 
       wheelGroup.add(spoke);
       spokeMeshesRef.current.push(spoke);
@@ -256,6 +326,18 @@ const Wheel3DView: React.FC<Wheel3DViewProps> = ({ result }) => {
       0.05
     );
     wheelGroup.add(arrowHelper);
+
+    return () => {
+      for (const obj of groundObjects) {
+        sceneRef.current?.remove(obj);
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          if (obj.material instanceof THREE.Material) {
+            obj.material.dispose();
+          }
+        }
+      }
+    };
   }, [result]);
 
   return (

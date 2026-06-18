@@ -1,21 +1,8 @@
 import React from 'react';
-import {
-  Paper,
-  Title,
-  NumberInput,
-  Slider,
-  Stack,
-  Text,
-  Alert,
-  Box,
-  Group,
-  Button,
-  Divider,
-  Badge,
-} from '@mantine/core';
+import { Paper, Title, NumberInput, Slider, Stack, Text, Alert, Box, Group, Button, Divider, Badge, Select, SegmentedControl, Tooltip } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
-import { WheelParameters, FORCE_THRESHOLD } from '../types';
+import { IconAlertCircle, IconRefresh, IconTool } from '@tabler/icons-react';
+import { WheelParameters, FORCE_THRESHOLD, MATERIALS, ROAD_CONDITIONS, getMaterialById, getRoadConditionById } from '../types';
 import { validateParameters } from '../physics/simulation';
 
 interface ControlPanelProps {
@@ -23,6 +10,28 @@ interface ControlPanelProps {
   onParametersChange: (params: WheelParameters) => void;
   onSimulate: () => void;
   canSimulate: boolean;
+}
+
+const LOG_MARKS = [
+  { value: 0, label: '1K' },
+  { value: 25, label: '10K' },
+  { value: 50, label: '100K' },
+  { value: 75, label: '1M' },
+  { value: 100, label: '10M' },
+];
+
+function cyclesToSlider(cycles: number): number {
+  const minLog = Math.log10(1000);
+  const maxLog = Math.log10(10000000);
+  const clamped = Math.max(minLog, Math.min(maxLog, Math.log10(Math.max(1, cycles))));
+  return ((clamped - minLog) / (maxLog - minLog)) * 100;
+}
+
+function sliderToCycles(sliderVal: number): number {
+  const minLog = Math.log10(1000);
+  const maxLog = Math.log10(10000000);
+  const logVal = minLog + (sliderVal / 100) * (maxLog - minLog);
+  return Math.round(Math.pow(10, logVal));
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -33,195 +42,313 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   const form = useForm<WheelParameters>({
     initialValues: parameters,
-    validate: {
-      wheelRadius: (value) =>
-        value > 0 ? null : '车轮半径必须大于 0',
-      spokeCount: (value) =>
-        value > 0 && Number.isInteger(value)
-          ? null
-          : '轮辐数量必须是大于 0 的整数',
-      axleLoad: (value) =>
-        value > 0 ? null : '车轴载重必须大于 0',
-      impactIntensity: (value) =>
-        value >= 0 ? null : '路面冲击强度不能为负数',
-    },
   });
 
   const validationErrors = validateParameters(form.values);
   const isValid = validationErrors.length === 0;
 
-  const handleChange = (field: keyof WheelParameters, value: number) => {
-    form.setFieldValue(field, value);
-    onParametersChange({ ...form.values, [field]: value });
+  const handleChange = (field: keyof WheelParameters, value: number | string) => {
+    const updated = { ...form.values, [field]: value };
+    form.setValues(updated);
+    onParametersChange(updated);
   };
 
   React.useEffect(() => {
     form.setValues(parameters);
   }, [parameters]);
 
+  const currentMaterial = getMaterialById(form.values.materialId);
+  const currentRoad = getRoadConditionById(form.values.roadConditionId);
+
   return (
     <Paper shadow="sm" p="md" radius="md" withBorder>
       <Stack gap="md">
         <Group justify="space-between">
-          <Title order={4}>参数配置</Title>
+          <Group gap="xs">
+            <IconTool size={20} />
+            <Title order={4}>参数配置</Title>
+          </Group>
           <Badge color="blue" variant="light">
             阈值: {FORCE_THRESHOLD.toLocaleString()} N
           </Badge>
         </Group>
 
-        <Divider />
+        <Divider label="基础结构参数" labelPosition="center" />
 
-        <Stack gap="lg">
-          <Box>
-            <Group justify="space-between" mb="xs">
-              <Text fw={500} size="sm">
-                车轮半径
-              </Text>
-              <Text size="sm" c="dimmed">
-                {form.values.wheelRadius.toFixed(2)} m
-              </Text>
-            </Group>
-            <NumberInput
-              placeholder="车轮半径"
-              min={0.1}
-              step={0.05}
-              precision={2}
-              hideControls
-              error={form.errors.wheelRadius}
-              value={form.values.wheelRadius}
-              onChange={(value) =>
-                handleChange('wheelRadius', typeof value === 'number' ? value : 0)
-              }
-              mb="xs"
-            />
-            <Slider
-              value={form.values.wheelRadius}
-              onChange={(value) => handleChange('wheelRadius', value)}
-              min={0.1}
-              max={3}
-              step={0.05}
-              marks={[
-                { value: 0.5, label: '0.5m' },
-                { value: 1.5, label: '1.5m' },
-                { value: 2.5, label: '2.5m' },
-              ]}
-            />
-          </Box>
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">车轮半径</Text>
+            <Text size="sm" c="dimmed">{form.values.wheelRadius.toFixed(2)} m</Text>
+          </Group>
+          <NumberInput
+            placeholder="车轮半径"
+            min={0.1}
+            max={3}
+            step={0.05}
+            decimalScale={2}
+            hideControls
+            value={form.values.wheelRadius}
+            onChange={(value) => handleChange('wheelRadius', typeof value === 'number' ? value : 0.1)}
+            mb="xs"
+          />
+          <Slider
+            value={form.values.wheelRadius}
+            onChange={(value) => handleChange('wheelRadius', value)}
+            min={0.1}
+            max={3}
+            step={0.05}
+            marks={[
+              { value: 0.5, label: '0.5m' },
+              { value: 1.5, label: '1.5m' },
+              { value: 2.5, label: '2.5m' },
+            ]}
+          />
+        </Box>
 
-          <Box>
-            <Group justify="space-between" mb="xs">
-              <Text fw={500} size="sm">
-                轮辐数量
-              </Text>
-              <Text size="sm" c="dimmed">
-                {form.values.spokeCount} 根
-              </Text>
-            </Group>
-            <NumberInput
-              placeholder="轮辐数量"
-              min={1}
-              step={1}
-              hideControls
-              error={form.errors.spokeCount}
-              value={form.values.spokeCount}
-              onChange={(value) =>
-                handleChange(
-                  'spokeCount',
-                  typeof value === 'number' ? Math.max(1, Math.floor(value)) : 1
-                )
-              }
-              mb="xs"
-            />
-            <Slider
-              value={form.values.spokeCount}
-              onChange={(value) => handleChange('spokeCount', value)}
-              min={3}
-              max={36}
-              step={1}
-              marks={[
-                { value: 6, label: '6' },
-                { value: 12, label: '12' },
-                { value: 24, label: '24' },
-              ]}
-            />
-          </Box>
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">轮辐数量</Text>
+            <Text size="sm" c="dimmed">{form.values.spokeCount} 根</Text>
+          </Group>
+          <NumberInput
+            placeholder="轮辐数量"
+            min={3}
+            max={36}
+            step={1}
+            hideControls
+            value={form.values.spokeCount}
+            onChange={(value) => handleChange('spokeCount', typeof value === 'number' ? Math.max(3, Math.floor(value)) : 3)}
+            mb="xs"
+          />
+          <Slider
+            value={form.values.spokeCount}
+            onChange={(value) => handleChange('spokeCount', value)}
+            min={3}
+            max={36}
+            step={1}
+            marks={[
+              { value: 6, label: '6' },
+              { value: 12, label: '12' },
+              { value: 24, label: '24' },
+            ]}
+          />
+        </Box>
 
-          <Box>
-            <Group justify="space-between" mb="xs">
-              <Text fw={500} size="sm">
-                车轴载重
-              </Text>
-              <Text size="sm" c="dimmed">
-                {form.values.axleLoad.toFixed(1)} kg
-              </Text>
-            </Group>
-            <NumberInput
-              placeholder="车轴载重"
-              min={1}
-              step={10}
-              precision={1}
-              hideControls
-              error={form.errors.axleLoad}
-              value={form.values.axleLoad}
-              onChange={(value) =>
-                handleChange('axleLoad', typeof value === 'number' ? value : 0)
-              }
-              mb="xs"
-            />
-            <Slider
-              value={form.values.axleLoad}
-              onChange={(value) => handleChange('axleLoad', value)}
-              min={10}
-              max={2000}
-              step={10}
-              marks={[
-                { value: 200, label: '200kg' },
-                { value: 1000, label: '1吨' },
-                { value: 1800, label: '1.8吨' },
-              ]}
-            />
-          </Box>
+        <Divider label="载荷与冲击" labelPosition="center" />
 
-          <Box>
-            <Group justify="space-between" mb="xs">
-              <Text fw={500} size="sm">
-                路面冲击强度
-              </Text>
-              <Text size="sm" c="dimmed">
-                {form.values.impactIntensity.toFixed(2)}
-              </Text>
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">车轴载重</Text>
+            <Text size="sm" c="dimmed">{form.values.axleLoad.toFixed(1)} kg</Text>
+          </Group>
+          <NumberInput
+            placeholder="车轴载重"
+            min={10}
+            max={2000}
+            step={10}
+            decimalScale={1}
+            hideControls
+            value={form.values.axleLoad}
+            onChange={(value) => handleChange('axleLoad', typeof value === 'number' ? value : 10)}
+            mb="xs"
+          />
+          <Slider
+            value={form.values.axleLoad}
+            onChange={(value) => handleChange('axleLoad', value)}
+            min={10}
+            max={2000}
+            step={10}
+            marks={[
+              { value: 200, label: '200kg' },
+              { value: 1000, label: '1吨' },
+              { value: 1800, label: '1.8吨' },
+            ]}
+          />
+        </Box>
+
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">路面冲击强度</Text>
+            <Text size="sm" c="dimmed">{form.values.impactIntensity.toFixed(2)}</Text>
+          </Group>
+          <NumberInput
+            placeholder="路面冲击强度"
+            min={0}
+            max={10}
+            step={0.1}
+            decimalScale={2}
+            hideControls
+            value={form.values.impactIntensity}
+            onChange={(value) => handleChange('impactIntensity', typeof value === 'number' ? Math.max(0, value) : 0)}
+            mb="xs"
+          />
+          <Slider
+            value={form.values.impactIntensity}
+            onChange={(value) => handleChange('impactIntensity', value)}
+            min={0}
+            max={10}
+            step={0.1}
+            marks={[
+              { value: 0, label: '平稳' },
+              { value: 3, label: '轻微' },
+              { value: 7, label: '剧烈' },
+              { value: 10, label: '极端' },
+            ]}
+          />
+        </Box>
+
+        <Box>
+          <Text fw={500} size="sm" mb="xs">路况类型</Text>
+          <SegmentedControl
+            fullWidth
+            value={form.values.roadConditionId}
+            onChange={(value) => handleChange('roadConditionId', value)}
+            data={ROAD_CONDITIONS.map((rc) => ({
+              value: rc.id,
+              label: (
+                <Tooltip label={rc.description} key={rc.id}>
+                  <Text size="xs" ta="center">
+                    {rc.icon} {rc.name}
+                  </Text>
+                </Tooltip>
+              ),
+            }))}
+          />
+          <Text size="xs" c="dimmed" mt={4}>
+            {currentRoad.icon} {currentRoad.name} — {currentRoad.description}
+          </Text>
+        </Box>
+
+        <Divider label="材料与截面" labelPosition="center" />
+
+        <Box>
+          <Text fw={500} size="sm" mb="xs">轮辐材料</Text>
+          <Select
+            value={form.values.materialId}
+            onChange={(value) => handleChange('materialId', value ?? 'elm')}
+            data={MATERIALS.map((m) => ({
+              value: m.id,
+              label: `${m.name} (${m.nameEn})`,
+            }))}
+            allowDeselect={false}
+          />
+          <Text size="xs" c="dimmed" mt={4}>
+            {currentMaterial.description}
+          </Text>
+          <Paper bg="gray.0" p="xs" radius="sm" mt="xs">
+            <Group gap="md" justify="center">
+              <Box>
+                <Text size="xs" c="dimmed">疲劳极限</Text>
+                <Text size="sm" fw={600}>{(currentMaterial.enduranceLimit / 1e6).toFixed(0)} MPa</Text>
+              </Box>
+              <Divider orientation="vertical" />
+              <Box>
+                <Text size="xs" c="dimmed">抗拉强度</Text>
+                <Text size="sm" fw={600}>{(currentMaterial.tensileStrength / 1e6).toFixed(0)} MPa</Text>
+              </Box>
+              <Divider orientation="vertical" />
+              <Box>
+                <Text size="xs" c="dimmed">弹性模量</Text>
+                <Text size="sm" fw={600}>{(currentMaterial.elasticModulus / 1e9).toFixed(1)} GPa</Text>
+              </Box>
             </Group>
-            <NumberInput
-              placeholder="路面冲击强度"
-              min={0}
-              step={0.1}
-              precision={2}
-              hideControls
-              error={form.errors.impactIntensity}
-              value={form.values.impactIntensity}
-              onChange={(value) =>
-                handleChange(
-                  'impactIntensity',
-                  typeof value === 'number' ? Math.max(0, value) : 0
-                )
-              }
-              mb="xs"
-            />
-            <Slider
-              value={form.values.impactIntensity}
-              onChange={(value) => handleChange('impactIntensity', value)}
-              min={0}
-              max={10}
-              step={0.1}
-              marks={[
-                { value: 0, label: '平稳' },
-                { value: 3, label: '轻微' },
-                { value: 7, label: '剧烈' },
-                { value: 10, label: '极端' },
-              ]}
-            />
-          </Box>
-        </Stack>
+          </Paper>
+        </Box>
+
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">轮辐宽度</Text>
+            <Text size="sm" c="dimmed">{(form.values.spokeWidth * 100).toFixed(1)} cm</Text>
+          </Group>
+          <NumberInput
+            placeholder="轮辐宽度"
+            min={2}
+            max={15}
+            step={0.1}
+            decimalScale={1}
+            hideControls
+            suffix=" cm"
+            value={parseFloat((form.values.spokeWidth * 100).toFixed(1))}
+            onChange={(value) => {
+              const meters = (typeof value === 'number' ? value : 2) / 100;
+              handleChange('spokeWidth', Math.max(0.02, Math.min(0.15, meters)));
+            }}
+            mb="xs"
+          />
+          <Slider
+            value={parseFloat((form.values.spokeWidth * 100).toFixed(1))}
+            onChange={(value) => handleChange('spokeWidth', value / 100)}
+            min={2}
+            max={15}
+            step={0.1}
+            marks={[
+              { value: 3, label: '3cm' },
+              { value: 8, label: '8cm' },
+              { value: 13, label: '13cm' },
+            ]}
+          />
+        </Box>
+
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">轮辐高度</Text>
+            <Text size="sm" c="dimmed">{(form.values.spokeHeight * 100).toFixed(1)} cm</Text>
+          </Group>
+          <NumberInput
+            placeholder="轮辐高度"
+            min={2}
+            max={20}
+            step={0.1}
+            decimalScale={1}
+            hideControls
+            suffix=" cm"
+            value={parseFloat((form.values.spokeHeight * 100).toFixed(1))}
+            onChange={(value) => {
+              const meters = (typeof value === 'number' ? value : 2) / 100;
+              handleChange('spokeHeight', Math.max(0.02, Math.min(0.20, meters)));
+            }}
+            mb="xs"
+          />
+          <Slider
+            value={parseFloat((form.values.spokeHeight * 100).toFixed(1))}
+            onChange={(value) => handleChange('spokeHeight', value / 100)}
+            min={2}
+            max={20}
+            step={0.1}
+            marks={[
+              { value: 4, label: '4cm' },
+              { value: 10, label: '10cm' },
+              { value: 16, label: '16cm' },
+            ]}
+          />
+        </Box>
+
+        <Divider label="运行工况" labelPosition="center" />
+
+        <Box>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500} size="sm">运行循环次数</Text>
+            <Text size="sm" c="dimmed">{form.values.operatingCycles.toLocaleString()} 次</Text>
+          </Group>
+          <NumberInput
+            placeholder="运行循环次数"
+            min={1000}
+            max={10000000}
+            step={1000}
+            hideControls
+            value={form.values.operatingCycles}
+            onChange={(value) => handleChange('operatingCycles', typeof value === 'number' ? Math.max(1000, Math.round(value)) : 1000)}
+            mb="xs"
+          />
+          <Slider
+            value={cyclesToSlider(form.values.operatingCycles)}
+            onChange={(value) => handleChange('operatingCycles', sliderToCycles(value))}
+            min={0}
+            max={100}
+            step={0.1}
+            marks={LOG_MARKS}
+          />
+        </Box>
 
         {!isValid && (
           <Alert
@@ -231,9 +358,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             variant="light"
           >
             {validationErrors.map((err, idx) => (
-              <Text key={idx} size="sm">
-                • {err}
-              </Text>
+              <Text key={idx} size="sm">• {err}</Text>
             ))}
           </Alert>
         )}

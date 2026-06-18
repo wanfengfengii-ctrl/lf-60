@@ -28,12 +28,16 @@ import {
   IconCheck,
   IconX,
 } from '@tabler/icons-react';
-import { SavedScheme, SimulationResult, FORCE_THRESHOLD, WheelParameters } from '../types';
-import { runSimulation, validateParameters } from '../physics/simulation';
+import {
+  SavedScheme,
+  SimulationResult,
+  FORCE_THRESHOLD,
+  getMaterialById,
+  getRoadConditionById,
+} from '../types';
 
 interface SchemeManagerProps {
   currentResult: SimulationResult | null;
-  currentParameters: WheelParameters;
   onLoadScheme: (scheme: SavedScheme) => void;
 }
 
@@ -41,7 +45,6 @@ const STORAGE_KEY = 'chariot_wheel_schemes';
 
 const SchemeManager: React.FC<SchemeManagerProps> = ({
   currentResult,
-  currentParameters,
   onLoadScheme,
 }) => {
   const [schemes, setSchemes] = useState<SavedScheme[]>([]);
@@ -73,13 +76,13 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newSchemes));
   };
 
-  const canSave = validateParameters(currentParameters).length === 0;
+  const canSave = currentResult !== null;
 
   const handleSave = () => {
     if (!canSave) {
       notifications.show({
         title: '无法保存',
-        message: '当前参数无效，请修正后再保存',
+        message: '当前无模拟结果，请先运行模拟',
         color: 'red',
         icon: <IconX size={18} />,
       });
@@ -93,23 +96,10 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
     saveForm.validate();
     if (!saveForm.isValid()) return;
 
-    if (!canSave) {
+    if (!canSave || !currentResult) {
       notifications.show({
         title: '保存失败',
-        message: '参数无效，无法生成模拟结果',
-        color: 'red',
-        icon: <IconX size={18} />,
-      });
-      return;
-    }
-
-    let resultToSave: SimulationResult;
-    try {
-      resultToSave = runSimulation(currentParameters);
-    } catch (err) {
-      notifications.show({
-        title: '保存失败',
-        message: err instanceof Error ? err.message : '模拟计算出错',
+        message: '无模拟结果可保存',
         color: 'red',
         icon: <IconX size={18} />,
       });
@@ -119,7 +109,7 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
     const newScheme: SavedScheme = {
       id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: saveForm.values.name.trim(),
-      result: resultToSave,
+      result: currentResult,
       createdAt: Date.now(),
     };
 
@@ -295,6 +285,8 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
                     const exceeded = scheme.result.spokeData.filter(
                       (s) => s.exceedsThreshold
                     ).length;
+                    const material = getMaterialById(scheme.result.parameters.materialId);
+                    const road = getRoadConditionById(scheme.result.parameters.roadConditionId);
                     return (
                       <Box
                         key={scheme.id}
@@ -318,6 +310,12 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
                               </Badge>
                               <Badge size="xs" color="gray" variant="light">
                                 {scheme.result.parameters.spokeCount}根
+                              </Badge>
+                              <Badge size="xs" color="teal" variant="light">
+                                {material.name}
+                              </Badge>
+                              <Badge size="xs" color="brown" variant="light">
+                                {road.name}
                               </Badge>
                               <Badge
                                 size="xs"
@@ -383,6 +381,7 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
           <Text size="sm" c="dimmed">
             将保存以下内容：
             <br />• 车轮半径、轮辐数量、载重、冲击强度等全部结构参数
+            <br />• 材料、路面条件、轮辐截面尺寸
             <br />• 每根轮辐的受力数据、疲劳风险及图表数据
           </Text>
           <TextInput
@@ -425,6 +424,8 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
                   const exceeded = scheme.result.spokeData.filter(
                     (s) => s.exceedsThreshold
                   ).length;
+                  const material = getMaterialById(p.materialId);
+                  const road = getRoadConditionById(p.roadConditionId);
                   return (
                     <List.Item key={scheme.id} p="xs" style={{ borderRadius: 8 }}>
                       <Paper p="sm" withBorder>
@@ -470,6 +471,15 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
                           </Badge>
                           <Badge size="xs" color="cyan" variant="light">
                             冲击: {p.impactIntensity.toFixed(2)}
+                          </Badge>
+                          <Badge size="xs" color="teal" variant="light">
+                            {material.name}
+                          </Badge>
+                          <Badge size="xs" color="brown" variant="light">
+                            {road.name}
+                          </Badge>
+                          <Badge size="xs" color="indigo" variant="light">
+                            截面: {(p.spokeWidth * 1000).toFixed(0)}×{(p.spokeHeight * 1000).toFixed(0)}mm
                           </Badge>
                           <Badge size="xs" color="pink" variant="light">
                             最大受力: {scheme.result.maxForce.toLocaleString()}N

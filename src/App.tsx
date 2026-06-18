@@ -1,17 +1,17 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   AppShell,
-  Header,
-  Title,
   Container,
   Grid,
   Paper,
   Text,
+  Title,
   Group,
   ThemeIcon,
   Box,
-  Divider,
   Stack,
+  Tabs,
+  Badge,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
@@ -20,57 +20,69 @@ import {
   IconInfoCircle,
   IconCheck,
   IconX,
+  IconFlame,
+  IconChartBar,
+  IconArrowsLeftRight,
+  IconFileExport,
 } from '@tabler/icons-react';
 import ControlPanel from './components/ControlPanel';
 import Wheel3DView from './components/Wheel3DView';
 import ForceCharts from './components/ForceCharts';
 import SchemeManager from './components/SchemeManager';
+import DurabilityPanel from './components/DurabilityPanel';
+import ComparisonView from './components/ComparisonView';
+import ReportExporter from './components/ReportExporter';
 import { runSimulation, validateParameters } from './physics/simulation';
 import {
   WheelParameters,
   SimulationResult,
   SavedScheme,
   FORCE_THRESHOLD,
+  DEFAULT_PARAMETERS,
 } from './types';
 
-const DEFAULT_PARAMETERS: WheelParameters = {
-  wheelRadius: 1.0,
-  spokeCount: 12,
-  axleLoad: 500,
-  impactIntensity: 2.0,
-};
+const STORAGE_KEY = 'chariot_wheel_schemes';
 
 const App: React.FC = () => {
   const [parameters, setParameters] = useState<WheelParameters>(DEFAULT_PARAMETERS);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [previousExceededCount, setPreviousExceededCount] = useState<number>(-1);
   const [isLoadingScheme, setIsLoadingScheme] = useState(false);
+  const [schemes, setSchemes] = useState<SavedScheme[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('force');
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        setSchemes(JSON.parse(saved));
+      } catch {
+        setSchemes([]);
+      }
+    }
+  }, []);
 
   const errors = useMemo(() => validateParameters(parameters), [parameters]);
   const hasValidParams = errors.length === 0;
 
   useEffect(() => {
     if (isLoadingScheme) return;
-
     if (!hasValidParams) {
       setResult(null);
       setPreviousExceededCount(-1);
       return;
     }
-
     try {
       const simResult = runSimulation(parameters);
       setResult(simResult);
-
       const exceededCount = simResult.spokeData.filter(
         (s) => s.exceedsThreshold
       ).length;
-
       if (exceededCount !== previousExceededCount) {
         if (exceededCount > 0 && previousExceededCount === 0) {
           notifications.show({
             title: '警告：存在超载轮辐',
-            message: `${exceededCount} 根轮辐超过承载阈值 (${FORCE_THRESHOLD.toLocaleString()} N)，建议增加轮辐数量或减少载重`,
+            message: `${exceededCount} 根轮辐超过承载阈值 (${FORCE_THRESHOLD.toLocaleString()} N)`,
             color: 'red',
             icon: <IconAlertTriangle size={18} />,
             autoClose: 6000,
@@ -119,46 +131,31 @@ const App: React.FC = () => {
     setTimeout(() => setIsLoadingScheme(false), 0);
   }, []);
 
+
+
   const statusInfo = useMemo(() => {
     if (!hasValidParams) {
-      return {
-        color: 'red',
-        label: '参数无效',
-        message: errors[0] || '请检查参数设置',
-      };
+      return { color: 'red', label: '参数无效', message: errors[0] || '请检查参数设置' };
     }
     if (!result) {
-      return {
-        color: 'gray',
-        label: '计算中',
-        message: '正在模拟计算...',
-      };
+      return { color: 'gray', label: '计算中', message: '正在模拟计算...' };
     }
     const exceeded = result.spokeData.filter((s) => s.exceedsThreshold).length;
     if (exceeded > 0) {
-      return {
-        color: 'red',
-        label: '超载警告',
-        message: `${exceeded} 根轮辐超过阈值`,
-      };
+      return { color: 'red', label: '超载警告', message: `${exceeded} 根轮辐超过阈值` };
     }
     if (result.maxForce > FORCE_THRESHOLD * 0.8) {
-      return {
-        color: 'orange',
-        label: '接近上限',
-        message: '最大受力接近承载阈值',
-      };
+      return { color: 'orange', label: '接近上限', message: '最大受力接近承载阈值' };
     }
-    return {
-      color: 'green',
-      label: '状态良好',
-      message: '所有轮辐安全运行',
-    };
+    if (result.fatigueAnalysis.totalDamage > 0.5) {
+      return { color: 'orange', label: '损伤预警', message: '疲劳损伤累积较高' };
+    }
+    return { color: 'green', label: '状态良好', message: '所有轮辐安全运行' };
   }, [result, hasValidParams, errors]);
 
   return (
     <AppShell
-      header={{ height: 70 }}
+      header={{ height: 64 }}
       padding="md"
       style={{ background: '#f8f9fa' }}
     >
@@ -166,15 +163,15 @@ const App: React.FC = () => {
         <Container size="xl" h="100%">
           <Group h="100%" justify="space-between" wrap="nowrap">
             <Group gap="md" wrap="nowrap">
-              <ThemeIcon size={48} radius="md" color="blue" variant="light">
-                <IconWheel size={28} />
+              <ThemeIcon size={44} radius="md" color="blue" variant="light">
+                <IconWheel size={26} />
               </ThemeIcon>
               <div>
-                <Title order={3} c="blue">
-                  古战车车轮受力模拟器
-                </Title>
+                <Text fw={700} size="lg" c="blue">
+                  古战车车轮多工况耐久性评估系统
+                </Text>
                 <Text size="xs" c="dimmed">
-                  Chariot Wheel Force Simulator — 结构力学分析系统
+                  Chariot Wheel Multi-Condition Durability Assessment System
                 </Text>
               </div>
             </Group>
@@ -185,21 +182,15 @@ const App: React.FC = () => {
                 withBorder
                 style={{
                   borderColor:
-                    statusInfo.color === 'red'
-                      ? '#ff6b6b'
-                      : statusInfo.color === 'orange'
-                      ? '#ffa94d'
-                      : statusInfo.color === 'green'
-                      ? '#40c057'
-                      : '#ced4da',
+                    statusInfo.color === 'red' ? '#ff6b6b'
+                    : statusInfo.color === 'orange' ? '#ffa94d'
+                    : statusInfo.color === 'green' ? '#40c057'
+                    : '#ced4da',
                   background:
-                    statusInfo.color === 'red'
-                      ? '#fff5f5'
-                      : statusInfo.color === 'orange'
-                      ? '#fff4e6'
-                      : statusInfo.color === 'green'
-                      ? '#ebfbee'
-                      : '#f8f9fa',
+                    statusInfo.color === 'red' ? '#fff5f5'
+                    : statusInfo.color === 'orange' ? '#fff4e6'
+                    : statusInfo.color === 'green' ? '#ebfbee'
+                    : '#f8f9fa',
                 }}
               >
                 <Group gap="sm" wrap="nowrap">
@@ -230,17 +221,18 @@ const App: React.FC = () => {
         <Container size="xl">
           <Grid gutter="lg">
             <Grid.Col span={{ base: 12, md: 3 }}>
-              <ControlPanel
-                parameters={parameters}
-                onParametersChange={setParameters}
-                onSimulate={handleSimulate}
-                canSimulate={hasValidParams}
-              />
-              <Divider my="md" />
-              <SchemeManager
-                currentResult={result}
-                onLoadScheme={handleLoadScheme}
-              />
+              <Stack gap="md">
+                <ControlPanel
+                  parameters={parameters}
+                  onParametersChange={setParameters}
+                  onSimulate={handleSimulate}
+                  canSimulate={hasValidParams}
+                />
+                <SchemeManager
+                  currentResult={result}
+                  onLoadScheme={handleLoadScheme}
+                />
+              </Stack>
             </Grid.Col>
 
             <Grid.Col span={{ base: 12, md: 9 }}>
@@ -250,15 +242,21 @@ const App: React.FC = () => {
                     <Group justify="space-between" mb="md">
                       <Title order={4}>三维车轮视图</Title>
                       <Group gap="xs">
+                        <Badge color="blue" variant="light" size="sm">
+                          {result?.material.name || '—'}
+                        </Badge>
+                        <Badge color="orange" variant="light" size="sm">
+                          {result?.roadCondition.name || '—'}
+                        </Badge>
                         <Text size="xs" c="dimmed">
-                          💡 拖拽旋转 · 滚轮缩放
+                          拖拽旋转 · 滚轮缩放
                         </Text>
                       </Group>
                     </Group>
                     {!result ? (
                       <Box
                         style={{
-                          height: 500,
+                          height: 450,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -281,23 +279,17 @@ const App: React.FC = () => {
                             )}
                           </ThemeIcon>
                           {hasValidParams ? (
-                            <Text c="dimmed" ta="center">
-                              正在加载车轮模型...
-                            </Text>
+                            <Text c="dimmed" ta="center">正在加载车轮模型...</Text>
                           ) : (
                             <>
-                              <Text c="red" fw={600} ta="center">
-                                参数无效，无法显示模型
-                              </Text>
-                              <Text size="sm" c="dimmed" ta="center">
-                                {errors[0]}
-                              </Text>
+                              <Text c="red" fw={600} ta="center">参数无效，无法显示模型</Text>
+                              <Text size="sm" c="dimmed" ta="center">{errors[0]}</Text>
                             </>
                           )}
                         </Stack>
                       </Box>
                     ) : (
-                      <div style={{ height: 500 }}>
+                      <div style={{ height: 450 }}>
                         <Wheel3DView result={result} />
                       </div>
                     )}
@@ -305,49 +297,53 @@ const App: React.FC = () => {
                 </Grid.Col>
 
                 <Grid.Col span={12}>
-                  <ForceCharts result={result} />
-                </Grid.Col>
+                  <Tabs value={activeTab} onChange={(v) => setActiveTab(v || 'force')}>
+                    <Tabs.List>
+                      <Tabs.Tab
+                        value="force"
+                        leftSection={<IconChartBar size={16} />}
+                      >
+                        受力分析
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="durability"
+                        leftSection={<IconFlame size={16} />}
+                      >
+                        耐久性评估
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="comparison"
+                        leftSection={<IconArrowsLeftRight size={16} />}
+                      >
+                        方案对比
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="report"
+                        leftSection={<IconFileExport size={16} />}
+                      >
+                        报告导出
+                      </Tabs.Tab>
+                    </Tabs.List>
 
-                <Grid.Col span={12}>
-                  <Paper shadow="sm" p="md" radius="md" withBorder>
-                    <Title order={5} mb="md">
-                      📖 使用说明
-                    </Title>
-                    <Grid>
-                      <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                        <Text fw={600} size="sm" mb="xs" c="blue">
-                          1️⃣ 配置参数
-                        </Text>
-                        <Text size="xs" c="dimmed" lh={1.6}>
-                          设置车轮半径（0.1~3m）、轮辐数量（3~36根）、车轴载重（10~2000kg）及路面冲击强度（0~10）。
-                        </Text>
-                      </Grid.Col>
-                      <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                        <Text fw={600} size="sm" mb="xs" c="orange">
-                          2️⃣ 实时更新
-                        </Text>
-                        <Text size="xs" c="dimmed" lh={1.6}>
-                          参数变化后系统自动重新计算，三维模型和图表实时刷新，无需手动点击运行。
-                        </Text>
-                      </Grid.Col>
-                      <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                        <Text fw={600} size="sm" mb="xs" c="red">
-                          3️⃣ 查看高亮
-                        </Text>
-                        <Text size="xs" c="dimmed" lh={1.6}>
-                          三维视图中：棕色=安全，黄色=中等，橙色=偏高，红色发光=超载（超过8000N阈值）。
-                        </Text>
-                      </Grid.Col>
-                      <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                        <Text fw={600} size="sm" mb="xs" c="green">
-                          4️⃣ 保存方案
-                        </Text>
-                        <Text size="xs" c="dimmed" lh={1.6}>
-                          保存当前参数对应的完整模拟结果，支持随时加载历史方案或导出JSON文件。
-                        </Text>
-                      </Grid.Col>
-                    </Grid>
-                  </Paper>
+                    <Tabs.Panel value="force" pt="md">
+                      <ForceCharts result={result} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="durability" pt="md">
+                      <DurabilityPanel result={result} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="comparison" pt="md">
+                      <ComparisonView schemes={schemes} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="report" pt="md">
+                      <ReportExporter
+                        result={result}
+                        schemeName={result ? `方案_${new Date(result.timestamp).toLocaleString('zh-CN')}` : ''}
+                      />
+                    </Tabs.Panel>
+                  </Tabs>
                 </Grid.Col>
               </Grid>
             </Grid.Col>

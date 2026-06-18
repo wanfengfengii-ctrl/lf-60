@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Paper, Title, Stack, Text, Group, Button, Badge, Divider, Card, SimpleGrid, Progress, Modal, ScrollArea, Accordion, List, ThemeIcon, Box } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconFileExport, IconDownload, IconPrinter, IconCheck, IconX, IconAlertTriangle, IconShield, IconFlame, IconInfoCircle } from '@tabler/icons-react';
@@ -93,6 +93,10 @@ function exportAsText(report: EngineeringReport) {
 const ReportExporter: React.FC<ReportExporterProps> = ({ result, schemeName }) => {
   const [report, setReport] = useState<EngineeringReport | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setReport(null);
+  }, [result?.timestamp]);
 
   const handleGenerate = useCallback(() => {
     if (!result) return;

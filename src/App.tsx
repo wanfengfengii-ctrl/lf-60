@@ -62,6 +62,11 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const updateSchemes = useCallback((newSchemes: SavedScheme[]) => {
+    setSchemes(newSchemes);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newSchemes));
+  }, []);
+
   const errors = useMemo(() => validateParameters(parameters), [parameters]);
   const hasValidParams = errors.length === 0;
 
@@ -231,6 +236,8 @@ const App: React.FC = () => {
                 <SchemeManager
                   currentResult={result}
                   onLoadScheme={handleLoadScheme}
+                  schemes={schemes}
+                  onSchemesChange={updateSchemes}
                 />
               </Stack>
             </Grid.Col>

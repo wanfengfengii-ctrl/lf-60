@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Title,
@@ -39,29 +39,19 @@ import {
 interface SchemeManagerProps {
   currentResult: SimulationResult | null;
   onLoadScheme: (scheme: SavedScheme) => void;
+  schemes: SavedScheme[];
+  onSchemesChange: (schemes: SavedScheme[]) => void;
 }
-
-const STORAGE_KEY = 'chariot_wheel_schemes';
 
 const SchemeManager: React.FC<SchemeManagerProps> = ({
   currentResult,
   onLoadScheme,
+  schemes,
+  onSchemesChange,
 }) => {
-  const [schemes, setSchemes] = useState<SavedScheme[]>([]);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [loadModalOpen, setLoadModalOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setSchemes(JSON.parse(saved));
-      } catch {
-        setSchemes([]);
-      }
-    }
-  }, []);
 
   const saveForm = useForm({
     initialValues: { name: '' },
@@ -70,11 +60,6 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
         value.trim().length > 0 ? null : '请输入方案名称',
     },
   });
-
-  const persistSchemes = (newSchemes: SavedScheme[]) => {
-    setSchemes(newSchemes);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newSchemes));
-  };
 
   const canSave = currentResult !== null;
 
@@ -113,7 +98,7 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
       createdAt: Date.now(),
     };
 
-    persistSchemes([newScheme, ...schemes]);
+    onSchemesChange([newScheme, ...schemes]);
     setSaveModalOpen(false);
     saveForm.reset();
     notifications.show({
@@ -136,7 +121,7 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
   };
 
   const handleDelete = (scheme: SavedScheme) => {
-    persistSchemes(schemes.filter((s) => s.id !== scheme.id));
+    onSchemesChange(schemes.filter((s) => s.id !== scheme.id));
     notifications.show({
       title: '删除成功',
       message: `方案 "${scheme.name}" 已删除`,
@@ -186,7 +171,7 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
         const existingIds = new Set(schemes.map((s) => s.id));
         const filtered = imported.filter((s) => !existingIds.has(s.id));
         const merged = [...filtered, ...schemes];
-        persistSchemes(merged);
+        onSchemesChange(merged);
 
         notifications.show({
           title: '导入成功',

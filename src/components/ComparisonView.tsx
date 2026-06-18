@@ -160,6 +160,7 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({ schemes }) => {
                           checked={isSelected}
                           disabled={isDisabled}
                           onChange={() => toggleScheme(scheme.id)}
+                          onClick={(e) => e.stopPropagation()}
                           color={isSelected ? SCHEME_COLORS[selectedIds.indexOf(scheme.id)] : undefined}
                         />
                         <Box>

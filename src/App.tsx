@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   AppShell,
   Header,
@@ -43,70 +43,95 @@ const DEFAULT_PARAMETERS: WheelParameters = {
 const App: React.FC = () => {
   const [parameters, setParameters] = useState<WheelParameters>(DEFAULT_PARAMETERS);
   const [result, setResult] = useState<SimulationResult | null>(null);
-  const [isSimulated, setIsSimulated] = useState(false);
+  const [previousExceededCount, setPreviousExceededCount] = useState<number>(-1);
+  const [isLoadingScheme, setIsLoadingScheme] = useState(false);
 
   const errors = useMemo(() => validateParameters(parameters), [parameters]);
   const hasValidParams = errors.length === 0;
 
-  const handleSimulate = useCallback(() => {
-    try {
-      const validationErrors = validateParameters(parameters);
-      if (validationErrors.length > 0) {
-        notifications.show({
-          title: '参数错误',
-          message: validationErrors.map((e) => `• ${e}`).join('\n'),
-          color: 'red',
-          icon: <IconX size={18} />,
-        });
-        return;
-      }
+  useEffect(() => {
+    if (isLoadingScheme) return;
 
+    if (!hasValidParams) {
+      setResult(null);
+      setPreviousExceededCount(-1);
+      return;
+    }
+
+    try {
       const simResult = runSimulation(parameters);
       setResult(simResult);
-      setIsSimulated(true);
 
       const exceededCount = simResult.spokeData.filter(
         (s) => s.exceedsThreshold
       ).length;
 
-      if (exceededCount > 0) {
-        notifications.show({
-          title: '警告：存在超载轮辐',
-          message: `${exceededCount} 根轮辐超过承载阈值 (${FORCE_THRESHOLD.toLocaleString()} N)，建议增加轮辐数量或减少载重`,
-          color: 'red',
-          icon: <IconAlertTriangle size={18} />,
-          autoClose: 6000,
-        });
-      } else {
-        notifications.show({
-          title: '模拟完成',
-          message: `所有 ${parameters.spokeCount} 根轮辐受力均在安全范围内`,
-          color: 'green',
-          icon: <IconCheck size={18} />,
-        });
+      if (exceededCount !== previousExceededCount) {
+        if (exceededCount > 0 && previousExceededCount === 0) {
+          notifications.show({
+            title: '警告：存在超载轮辐',
+            message: `${exceededCount} 根轮辐超过承载阈值 (${FORCE_THRESHOLD.toLocaleString()} N)，建议增加轮辐数量或减少载重`,
+            color: 'red',
+            icon: <IconAlertTriangle size={18} />,
+            autoClose: 6000,
+          });
+        } else if (exceededCount === 0 && previousExceededCount > 0) {
+          notifications.show({
+            title: '状态恢复安全',
+            message: `所有 ${parameters.spokeCount} 根轮辐受力均在安全范围内`,
+            color: 'green',
+            icon: <IconCheck size={18} />,
+          });
+        }
+        setPreviousExceededCount(exceededCount);
       }
-    } catch (err) {
+    } catch {
+      setResult(null);
+    }
+  }, [parameters, hasValidParams, isLoadingScheme, previousExceededCount]);
+
+  const handleSimulate = useCallback(() => {
+    if (!hasValidParams) {
       notifications.show({
-        title: '模拟失败',
-        message: err instanceof Error ? err.message : '未知错误',
+        title: '参数错误',
+        message: errors.map((e) => `• ${e}`).join('\n'),
         color: 'red',
         icon: <IconX size={18} />,
       });
+      return;
     }
-  }, [parameters]);
+    notifications.show({
+      title: '已刷新',
+      message: '模拟结果已根据当前参数更新',
+      color: 'blue',
+      icon: <IconCheck size={18} />,
+    });
+  }, [hasValidParams, errors]);
 
   const handleLoadScheme = useCallback((scheme: SavedScheme) => {
+    setIsLoadingScheme(true);
     setParameters(scheme.result.parameters);
     setResult(scheme.result);
-    setIsSimulated(true);
+    const exceededCount = scheme.result.spokeData.filter(
+      (s) => s.exceedsThreshold
+    ).length;
+    setPreviousExceededCount(exceededCount);
+    setTimeout(() => setIsLoadingScheme(false), 0);
   }, []);
 
   const statusInfo = useMemo(() => {
+    if (!hasValidParams) {
+      return {
+        color: 'red',
+        label: '参数无效',
+        message: errors[0] || '请检查参数设置',
+      };
+    }
     if (!result) {
       return {
         color: 'gray',
-        label: '未运行',
-        message: '调整参数后点击"运行模拟"',
+        label: '计算中',
+        message: '正在模拟计算...',
       };
     }
     const exceeded = result.spokeData.filter((s) => s.exceedsThreshold).length;
@@ -129,7 +154,7 @@ const App: React.FC = () => {
       label: '状态良好',
       message: '所有轮辐安全运行',
     };
-  }, [result]);
+  }, [result, hasValidParams, errors]);
 
   return (
     <AppShell
@@ -230,7 +255,7 @@ const App: React.FC = () => {
                         </Text>
                       </Group>
                     </Group>
-                    {!isSimulated ? (
+                    {!result ? (
                       <Box
                         style={{
                           height: 500,
@@ -243,16 +268,32 @@ const App: React.FC = () => {
                         }}
                       >
                         <Stack align="center" gap="sm">
-                          <ThemeIcon size={64} radius="md" color="blue" variant="light">
-                            <IconWheel size={36} />
+                          <ThemeIcon
+                            size={64}
+                            radius="md"
+                            color={hasValidParams ? 'blue' : 'red'}
+                            variant="light"
+                          >
+                            {hasValidParams ? (
+                              <IconWheel size={36} />
+                            ) : (
+                              <IconAlertTriangle size={36} />
+                            )}
                           </ThemeIcon>
-                          <Text c="dimmed" ta="center">
-                            调整左侧参数后点击
-                            <Text fw={600} c="blue" component="span" mx="xs">
-                              "运行模拟"
+                          {hasValidParams ? (
+                            <Text c="dimmed" ta="center">
+                              正在加载车轮模型...
                             </Text>
-                            查看车轮三维模型
-                          </Text>
+                          ) : (
+                            <>
+                              <Text c="red" fw={600} ta="center">
+                                参数无效，无法显示模型
+                              </Text>
+                              <Text size="sm" c="dimmed" ta="center">
+                                {errors[0]}
+                              </Text>
+                            </>
+                          )}
                         </Stack>
                       </Box>
                     ) : (
@@ -283,10 +324,10 @@ const App: React.FC = () => {
                       </Grid.Col>
                       <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                         <Text fw={600} size="sm" mb="xs" c="orange">
-                          2️⃣ 运行模拟
+                          2️⃣ 实时更新
                         </Text>
                         <Text size="xs" c="dimmed" lh={1.6}>
-                          验证参数有效后点击运行模拟，系统将根据物理模型计算每根轮辐的静态受力和冲击受力。
+                          参数变化后系统自动重新计算，三维模型和图表实时刷新，无需手动点击运行。
                         </Text>
                       </Grid.Col>
                       <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -294,7 +335,7 @@ const App: React.FC = () => {
                           3️⃣ 查看高亮
                         </Text>
                         <Text size="xs" c="dimmed" lh={1.6}>
-                          三维视图中：绿色=安全，黄色=中等，橙色=偏高，红色=超载（超过8000N阈值）。
+                          三维视图中：棕色=安全，黄色=中等，橙色=偏高，红色发光=超载（超过8000N阈值）。
                         </Text>
                       </Grid.Col>
                       <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -302,7 +343,7 @@ const App: React.FC = () => {
                           4️⃣ 保存方案
                         </Text>
                         <Text size="xs" c="dimmed" lh={1.6}>
-                          保存完整参数和图表结果，支持随时加载历史方案或导出JSON文件分享。
+                          保存当前参数对应的完整模拟结果，支持随时加载历史方案或导出JSON文件。
                         </Text>
                       </Grid.Col>
                     </Grid>

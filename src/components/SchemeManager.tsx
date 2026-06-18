@@ -28,10 +28,12 @@ import {
   IconCheck,
   IconX,
 } from '@tabler/icons-react';
-import { SavedScheme, SimulationResult, FORCE_THRESHOLD } from '../types';
+import { SavedScheme, SimulationResult, FORCE_THRESHOLD, WheelParameters } from '../types';
+import { runSimulation, validateParameters } from '../physics/simulation';
 
 interface SchemeManagerProps {
   currentResult: SimulationResult | null;
+  currentParameters: WheelParameters;
   onLoadScheme: (scheme: SavedScheme) => void;
 }
 
@@ -39,6 +41,7 @@ const STORAGE_KEY = 'chariot_wheel_schemes';
 
 const SchemeManager: React.FC<SchemeManagerProps> = ({
   currentResult,
+  currentParameters,
   onLoadScheme,
 }) => {
   const [schemes, setSchemes] = useState<SavedScheme[]>([]);
@@ -70,11 +73,13 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newSchemes));
   };
 
+  const canSave = validateParameters(currentParameters).length === 0;
+
   const handleSave = () => {
-    if (!currentResult) {
+    if (!canSave) {
       notifications.show({
         title: '无法保存',
-        message: '当前没有可保存的模拟结果',
+        message: '当前参数无效，请修正后再保存',
         color: 'red',
         icon: <IconX size={18} />,
       });
@@ -85,14 +90,36 @@ const SchemeManager: React.FC<SchemeManagerProps> = ({
   };
 
   const confirmSave = () => {
-    if (!currentResult) return;
     saveForm.validate();
     if (!saveForm.isValid()) return;
+
+    if (!canSave) {
+      notifications.show({
+        title: '保存失败',
+        message: '参数无效，无法生成模拟结果',
+        color: 'red',
+        icon: <IconX size={18} />,
+      });
+      return;
+    }
+
+    let resultToSave: SimulationResult;
+    try {
+      resultToSave = runSimulation(currentParameters);
+    } catch (err) {
+      notifications.show({
+        title: '保存失败',
+        message: err instanceof Error ? err.message : '模拟计算出错',
+        color: 'red',
+        icon: <IconX size={18} />,
+      });
+      return;
+    }
 
     const newScheme: SavedScheme = {
       id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: saveForm.values.name.trim(),
-      result: JSON.parse(JSON.stringify(currentResult)),
+      result: resultToSave,
       createdAt: Date.now(),
     };
 

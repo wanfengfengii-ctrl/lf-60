@@ -13,6 +13,7 @@ import {
   getMaterialById,
   getRoadConditionById,
 } from '../types';
+import { enrichSimulationResult } from './diagnostic';
 
 const GRAVITY = 9.81;
 
@@ -319,7 +320,7 @@ export function runSimulation(params: WheelParameters): SimulationResult {
 
   const multiRoadResults = buildMultiRoadResults(params, material);
 
-  return {
+  return enrichSimulationResult({
     parameters: params,
     spokeData,
     maxForce: Math.round(maxForce * 100) / 100,
@@ -330,7 +331,7 @@ export function runSimulation(params: WheelParameters): SimulationResult {
     roadCondition,
     fatigueAnalysis,
     multiRoadResults,
-  };
+  });
 }
 
 function calculateFatigueRisk(

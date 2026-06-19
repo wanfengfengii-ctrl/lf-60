@@ -24,6 +24,8 @@ import {
   IconChartBar,
   IconArrowsLeftRight,
   IconFileExport,
+  IconStethoscope,
+  IconTool,
 } from '@tabler/icons-react';
 import ControlPanel from './components/ControlPanel';
 import Wheel3DView from './components/Wheel3DView';
@@ -32,6 +34,8 @@ import SchemeManager from './components/SchemeManager';
 import DurabilityPanel from './components/DurabilityPanel';
 import ComparisonView from './components/ComparisonView';
 import ReportExporter from './components/ReportExporter';
+import FaultDiagnosisPanel from './components/FaultDiagnosisPanel';
+import MaintenanceDecisionPanel from './components/MaintenanceDecisionPanel';
 import { runSimulation, validateParameters } from './physics/simulation';
 import {
   WheelParameters,
@@ -319,6 +323,18 @@ const App: React.FC = () => {
                         耐久性评估
                       </Tabs.Tab>
                       <Tabs.Tab
+                        value="diagnosis"
+                        leftSection={<IconStethoscope size={16} />}
+                      >
+                        故障诊断
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="maintenance"
+                        leftSection={<IconTool size={16} />}
+                      >
+                        维修决策
+                      </Tabs.Tab>
+                      <Tabs.Tab
                         value="comparison"
                         leftSection={<IconArrowsLeftRight size={16} />}
                       >
@@ -338,6 +354,14 @@ const App: React.FC = () => {
 
                     <Tabs.Panel value="durability" pt="md">
                       <DurabilityPanel result={result} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="diagnosis" pt="md">
+                      <FaultDiagnosisPanel result={result} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="maintenance" pt="md">
+                      <MaintenanceDecisionPanel result={result} />
                     </Tabs.Panel>
 
                     <Tabs.Panel value="comparison" pt="md">

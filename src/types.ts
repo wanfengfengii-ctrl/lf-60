@@ -34,6 +34,9 @@ export interface SimulationResult {
   roadCondition: RoadCondition;
   fatigueAnalysis: FatigueAnalysis;
   multiRoadResults: MultiRoadResult[];
+  diagnosisResult?: DiagnosisResult;
+  maintenanceRecommendation?: MaintenanceRecommendation;
+  maintenanceComparison?: MaintenanceComparison;
 }
 
 export interface SavedScheme {
@@ -214,4 +217,162 @@ export function getMaterialById(id: string): MaterialProperties {
 
 export function getRoadConditionById(id: string): RoadCondition {
   return ROAD_CONDITIONS.find((r) => r.id === id) || ROAD_CONDITIONS[1];
+}
+
+export type FaultType = 'spoke_crack' | 'hub_looseness' | 'rim_deformation';
+
+export type FaultSeverity = 'none' | 'mild' | 'moderate' | 'severe' | 'critical';
+
+export interface SpokeCrackFault {
+  spokeIndex: number;
+  severity: FaultSeverity;
+  crackLength: number;
+  crackDepth: number;
+  crackPosition: 'root' | 'middle' | 'rim';
+  stressConcentration: number;
+  propagationRisk: number;
+  structuralImpact: number;
+}
+
+export interface HubLoosenessFault {
+  severity: FaultSeverity;
+  loosenessDegree: number;
+  boltTensionLoss: number;
+  vibrationAmplitude: number;
+  runoutRisk: number;
+  safetyMargin: number;
+}
+
+export interface RimDeformationFault {
+  severity: FaultSeverity;
+  deformationType: 'radial' | 'lateral' | 'combined';
+  maxRunout: number;
+  deformationAngle: number;
+  tireSealRisk: number;
+  balanceImpact: number;
+}
+
+export interface StructuralSafetyImpact {
+  safetyFactorReduction: number;
+  loadCapacityLoss: number;
+  collapseRisk: number;
+  structuralIntegrity: number;
+}
+
+export interface LifeImpact {
+  fatigueLifeReduction: number;
+  acceleratedAgingRate: number;
+  maintenanceInterval: number;
+}
+
+export interface StabilityImpact {
+  vibrationIncrease: number;
+  handlingDegradation: number;
+  noiseLevelIncrease: number;
+  rideComfortLoss: number;
+}
+
+export interface DiagnosisResult {
+  spokeCracks: SpokeCrackFault[];
+  hubLooseness: HubLoosenessFault;
+  rimDeformation: RimDeformationFault;
+  overallFaultLevel: FaultSeverity;
+  structuralSafety: StructuralSafetyImpact;
+  lifeImpact: LifeImpact;
+  stabilityImpact: StabilityImpact;
+  riskScore: number;
+  immediateAttention: string[];
+  diagnosticTimestamp: number;
+}
+
+export type RepairActionType =
+  | 'material_replace'
+  | 'spoke_reinforce'
+  | 'spoke_replace'
+  | 'hub_tighten'
+  | 'hub_replace'
+  | 'rim_true'
+  | 'rim_replace'
+  | 'load_adjust'
+  | 'road_avoid'
+  | 'regular_inspection';
+
+export interface RepairAction {
+  id: string;
+  type: RepairActionType;
+  title: string;
+  description: string;
+  priority: 'immediate' | 'high' | 'medium' | 'low';
+  affectedComponents: string[];
+  complexity: number;
+  durationHours: number;
+  prerequisites: string[];
+}
+
+export interface CostBreakdown {
+  materialCost: number;
+  laborCost: number;
+  laborHours: number;
+  equipmentCost: number;
+  inspectionCost: number;
+  downtimeCost: number;
+  totalCost: number;
+}
+
+export interface MaintenancePlan {
+  id: string;
+  name: string;
+  description: string;
+  planType: 'repair' | 'reinforce' | 'overhaul' | 'preventive';
+  actions: RepairAction[];
+  totalDurationHours: number;
+}
+
+export interface ExpectedEffect {
+  safetyFactorImprovement: number;
+  lifeExtension: number;
+  loadCapacityRecovery: number;
+  stabilityRecovery: number;
+  vibrationReduction: number;
+  overallScoreImprovement: number;
+}
+
+export interface MaintenanceRecommendation {
+  diagnosisResult: DiagnosisResult;
+  plans: MaintenancePlan[];
+  recommendedPlanId: string;
+  costEstimates: Record<string, CostBreakdown>;
+  expectedEffects: Record<string, ExpectedEffect>;
+}
+
+export interface ComparisonMetric {
+  name: string;
+  unit: string;
+  beforeValue: number;
+  afterValue: number;
+  improvement: number;
+  improvementPercent: number;
+}
+
+export interface MaintenanceComparison {
+  planId: string;
+  planName: string;
+  metrics: ComparisonMetric[];
+  beforeOverview: {
+    structuralSafety: number;
+    estimatedLife: number;
+    stability: number;
+    overallScore: number;
+  };
+  afterOverview: {
+    structuralSafety: number;
+    estimatedLife: number;
+    stability: number;
+    overallScore: number;
+  };
+  radarData: {
+    category: string;
+    before: number;
+    after: number;
+  }[];
 }

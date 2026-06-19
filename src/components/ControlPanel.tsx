@@ -1,8 +1,8 @@
 import React from 'react';
 import { Paper, Title, NumberInput, Slider, Stack, Text, Alert, Box, Group, Button, Divider, Badge, Select, SegmentedControl, Tooltip } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconAlertCircle, IconRefresh, IconTool } from '@tabler/icons-react';
-import { WheelParameters, FORCE_THRESHOLD, MATERIALS, ROAD_CONDITIONS, getMaterialById, getRoadConditionById } from '../types';
+import { IconAlertCircle, IconRefresh, IconTool, IconMap, IconActivity } from '@tabler/icons-react';
+import { WheelParameters, FORCE_THRESHOLD, MATERIALS, ROAD_CONDITIONS, getMaterialById, getRoadConditionById, BATTLEFIELD_TERRAINS, BattlefieldTerrain } from '../types';
 import { validateParameters } from '../physics/simulation';
 
 interface ControlPanelProps {
@@ -10,6 +10,10 @@ interface ControlPanelProps {
   onParametersChange: (params: WheelParameters) => void;
   onSimulate: () => void;
   canSimulate: boolean;
+  selectedTerrain?: BattlefieldTerrain;
+  onSelectTerrain?: (terrainId: string) => void;
+  onRunAdvancedSimulation?: () => void;
+  isRunningAdvancedSimulation?: boolean;
 }
 
 const LOG_MARKS = [
@@ -39,6 +43,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onParametersChange,
   onSimulate,
   canSimulate,
+  selectedTerrain,
+  onSelectTerrain,
+  onRunAdvancedSimulation,
+  isRunningAdvancedSimulation = false,
 }) => {
   const form = useForm<WheelParameters>({
     initialValues: parameters,
@@ -363,6 +371,43 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           </Alert>
         )}
 
+        {selectedTerrain && onSelectTerrain && (
+          <>
+            <Divider label="战场地形" labelPosition="center" />
+
+            <Box>
+              <Group gap="xs" mb="xs">
+                <IconMap size={14} />
+                <Text fw={500} size="sm">选择战场环境</Text>
+              </Group>
+              <Select
+                value={selectedTerrain.id}
+                onChange={(value) => value && onSelectTerrain(value)}
+                data={BATTLEFIELD_TERRAINS.map((t) => ({
+                  value: t.id,
+                  label: `${t.icon} ${t.name}`,
+                }))}
+                allowDeselect={false}
+                size="sm"
+              />
+              <Group gap="xs" mt="xs" wrap="nowrap">
+                <Badge color="orange" variant="light" size="sm">
+                  冲击 {selectedTerrain.impactMultiplier.toFixed(1)}x
+                </Badge>
+                <Badge color="red" variant="light" size="sm">
+                  频率 {selectedTerrain.frequencyFactor.toFixed(1)}x
+                </Badge>
+                <Badge color="yellow" variant="light" size="sm">
+                  限速 {selectedTerrain.speedLimit}
+                </Badge>
+              </Group>
+              <Text size="xs" c="dimmed" mt={4} lineClamp={2}>
+                {selectedTerrain.description}
+              </Text>
+            </Box>
+          </>
+        )}
+
         <Button
           fullWidth
           leftSection={<IconRefresh size={18} />}
@@ -373,6 +418,21 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         >
           {isValid ? '运行模拟 / 刷新结果' : '请修正参数后运行'}
         </Button>
+
+        {onRunAdvancedSimulation && (
+          <Button
+            fullWidth
+            leftSection={<IconActivity size={18} />}
+            onClick={onRunAdvancedSimulation}
+            loading={isRunningAdvancedSimulation}
+            disabled={!isValid || !canSimulate}
+            color="violet"
+            variant="light"
+            size="md"
+          >
+            高级仿真 (时序/损伤/优化)
+          </Button>
+        )}
       </Stack>
     </Paper>
   );

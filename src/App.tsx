@@ -12,6 +12,7 @@ import {
   Stack,
   Tabs,
   Badge,
+  Button,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
@@ -33,6 +34,14 @@ import {
   IconDashboard,
   IconGauge,
   IconFileText,
+  IconActivity,
+  IconMap,
+  IconRoute,
+  IconBug,
+  IconPlayerPlay,
+  IconSettings,
+  IconChartDots,
+  IconSwords,
 } from '@tabler/icons-react';
 import ControlPanel from './components/ControlPanel';
 import Wheel3DView from './components/Wheel3DView';
@@ -50,14 +59,40 @@ import LifePredictionPanel from './components/LifePredictionPanel';
 import ResourceSchedulingPanel from './components/ResourceSchedulingPanel';
 import SparePartsAnalysisPanel from './components/SparePartsAnalysisPanel';
 import FleetOperationDashboard from './components/FleetOperationDashboard';
+import TimeSeriesPanel from './components/TimeSeriesPanel';
+import BattlefieldTerrainPanel from './components/BattlefieldTerrainPanel';
+import MissionGroupPanel from './components/MissionGroupPanel';
+import DamageEvolutionPanel from './components/DamageEvolutionPanel';
+import FailurePlaybackPanel from './components/FailurePlaybackPanel';
+import StructuralOptimizationPanel from './components/StructuralOptimizationPanel';
+import MultiSchemeDecisionPanel from './components/MultiSchemeDecisionPanel';
+import CombatScenarioPanel from './components/CombatScenarioPanel';
 import { runSimulation, validateParameters } from './physics/simulation';
 import { generateAllFleetData } from './physics/fleetManagement';
+import {
+  generateTimeSeriesData,
+  simulateDamageEvolution,
+  createFailurePlaybackSession,
+  generateOptimizationSchemes,
+  evaluateMultiSchemeDecision,
+  createMissionGroup,
+} from './physics/digitalTwin';
 import {
   WheelParameters,
   SimulationResult,
   SavedScheme,
   FORCE_THRESHOLD,
   DEFAULT_PARAMETERS,
+  BATTLEFIELD_TERRAINS,
+  MISSION_TEMPLATES,
+  BattlefieldTerrain,
+  LoadMission,
+  MissionGroup,
+  TimeSeriesRecord,
+  DamageEvolutionResult,
+  FailurePlaybackSession,
+  StructuralOptimizationScheme,
+  MultiSchemeDecisionResult,
 } from './types';
 
 const STORAGE_KEY = 'chariot_wheel_schemes';
@@ -70,6 +105,17 @@ const App: React.FC = () => {
   const [schemes, setSchemes] = useState<SavedScheme[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>('force');
   const [fleetData, setFleetData] = useState<any>(null);
+
+  const [selectedTerrain, setSelectedTerrain] = useState<BattlefieldTerrain>(BATTLEFIELD_TERRAINS[0]);
+  const [missionGroup, setMissionGroup] = useState<MissionGroup | null>(null);
+  const [selectedMissions, setSelectedMissions] = useState<LoadMission[]>([MISSION_TEMPLATES[0]]);
+  const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesRecord | null>(null);
+  const [damageEvolutionResult, setDamageEvolutionResult] = useState<DamageEvolutionResult | null>(null);
+  const [failurePlaybackSession, setFailurePlaybackSession] = useState<FailurePlaybackSession | null>(null);
+  const [optimizationSchemes, setOptimizationSchemes] = useState<StructuralOptimizationScheme[]>([]);
+  const [multiSchemeDecisionResult, setMultiSchemeDecisionResult] = useState<MultiSchemeDecisionResult | null>(null);
+  const [isRunningAdvancedSimulation, setIsRunningAdvancedSimulation] = useState(false);
+  const [selectedSchemeId, setSelectedSchemeId] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -159,7 +205,137 @@ const App: React.FC = () => {
     setTimeout(() => setIsLoadingScheme(false), 0);
   }, []);
 
+  const runAdvancedSimulation = useCallback(() => {
+    if (!result || !hasValidParams) return;
 
+    setIsRunningAdvancedSimulation(true);
+
+    setTimeout(() => {
+      try {
+        const tsData = generateTimeSeriesData(result, parameters.operatingCycles, Math.floor(parameters.operatingCycles / 50));
+        setTimeSeriesData(tsData);
+
+        const deResult = simulateDamageEvolution(parameters, selectedTerrain, parameters.operatingCycles, 40);
+        setDamageEvolutionResult(deResult);
+
+        const fpSession = createFailurePlaybackSession('wheel_001', tsData, deResult);
+        setFailurePlaybackSession(fpSession);
+
+        if (selectedMissions.length > 0) {
+          const mg = createMissionGroup(
+            '自定义任务编组',
+            `包含 ${selectedMissions.length} 个任务的自定义编组`,
+            selectedMissions
+          );
+          setMissionGroup(mg);
+        }
+
+        const optSchemes = generateOptimizationSchemes(result, 6);
+        setOptimizationSchemes(optSchemes);
+
+        if (optSchemes.length > 0) {
+          const decisionResult = evaluateMultiSchemeDecision(optSchemes);
+          setMultiSchemeDecisionResult(decisionResult);
+        }
+
+        notifications.show({
+          title: '高级仿真完成',
+          message: '时序记录、损伤演化、失效回放、优化方案等数据已生成',
+          color: 'green',
+          icon: <IconCheck size={18} />,
+        });
+      } catch (error) {
+        console.error('Advanced simulation error:', error);
+        notifications.show({
+          title: '高级仿真出错',
+          message: '部分数据生成失败，请检查参数设置',
+          color: 'red',
+          icon: <IconAlertTriangle size={18} />,
+        });
+      } finally {
+        setIsRunningAdvancedSimulation(false);
+      }
+    }, 800);
+  }, [result, hasValidParams, parameters, selectedTerrain, selectedMissions]);
+
+  const handleSelectTerrain = useCallback((terrainId: string) => {
+    const terrain = BATTLEFIELD_TERRAINS.find(t => t.id === terrainId);
+    if (terrain) {
+      setSelectedTerrain(terrain);
+      setParameters(prev => ({
+        ...prev,
+        impactIntensity: Math.max(prev.impactIntensity, terrain.impactMultiplier * 2),
+        axleLoad: Math.min(prev.axleLoad, prev.axleLoad * (1 - terrain.loadReduction)),
+      }));
+    }
+  }, []);
+
+  const handleAddMission = useCallback((mission: LoadMission) => {
+    setSelectedMissions(prev => [...prev, { ...mission, id: Math.random().toString(36).substring(2, 11) }]);
+  }, []);
+
+  const handleRemoveMission = useCallback((index: number) => {
+    setSelectedMissions(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleReorderMissions = useCallback((fromIndex: number, toIndex: number) => {
+    setSelectedMissions(prev => {
+      const newMissions = [...prev];
+      const [removed] = newMissions.splice(fromIndex, 1);
+      newMissions.splice(toIndex, 0, removed);
+      return newMissions;
+    });
+  }, []);
+
+  const handleClearMissions = useCallback(() => {
+    setSelectedMissions([]);
+    setMissionGroup(null);
+  }, []);
+
+  const handleApplyScenarioConfig = useCallback((config: WheelParameters) => {
+    setParameters(config);
+  }, []);
+
+  const handleApplyScenarioTerrain = useCallback((terrainId: string) => {
+    handleSelectTerrain(terrainId);
+  }, [handleSelectTerrain]);
+
+  const handleSchemeSelect = useCallback((schemeId: string) => {
+    setSelectedSchemeId(schemeId);
+  }, []);
+
+  const handleGenerateSchemes = useCallback(() => {
+    if (!result) return;
+    setIsRunningAdvancedSimulation(true);
+    setTimeout(() => {
+      const optSchemes = generateOptimizationSchemes(result, 6);
+      setOptimizationSchemes(optSchemes);
+      setSelectedSchemeId(optSchemes.length > 0 ? optSchemes[0].id : null);
+      setIsRunningAdvancedSimulation(false);
+      notifications.show({
+        title: '优化方案已生成',
+        message: `共生成 ${optSchemes.length} 个结构优化方案`,
+        color: 'green',
+        icon: <IconCheck size={18} />,
+      });
+    }, 800);
+  }, [result]);
+
+  const handleRunDecision = useCallback(() => {
+    if (optimizationSchemes.length === 0) return;
+    setIsRunningAdvancedSimulation(true);
+    setTimeout(() => {
+      const decisionResult = evaluateMultiSchemeDecision(optimizationSchemes);
+      setMultiSchemeDecisionResult(decisionResult);
+      setIsRunningAdvancedSimulation(false);
+      notifications.show({
+        title: '决策分析完成',
+        message: `推荐方案: ${decisionResult.schemes.find(s => s.id === decisionResult.recommendedSchemeId)?.name}`,
+        color: 'grape',
+        icon: <IconCheck size={18} />,
+      });
+    }, 600);
+  }, [optimizationSchemes]);
 
   const statusInfo = useMemo(() => {
     if (!hasValidParams) {
@@ -255,6 +431,10 @@ const App: React.FC = () => {
                   onParametersChange={setParameters}
                   onSimulate={handleSimulate}
                   canSimulate={hasValidParams}
+                  selectedTerrain={selectedTerrain}
+                  onSelectTerrain={handleSelectTerrain}
+                  onRunAdvancedSimulation={runAdvancedSimulation}
+                  isRunningAdvancedSimulation={isRunningAdvancedSimulation}
                 />
                 <SchemeManager
                   currentResult={result}
@@ -407,6 +587,54 @@ const App: React.FC = () => {
                       >
                         报告导出
                       </Tabs.Tab>
+                      <Tabs.Tab
+                        value="timeSeries"
+                        leftSection={<IconActivity size={16} />}
+                      >
+                        时序记录
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="terrain"
+                        leftSection={<IconMap size={16} />}
+                      >
+                        战场地形
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="mission"
+                        leftSection={<IconRoute size={16} />}
+                      >
+                        任务编组
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="damage"
+                        leftSection={<IconBug size={16} />}
+                      >
+                        损伤演化
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="playback"
+                        leftSection={<IconPlayerPlay size={16} />}
+                      >
+                        失效回放
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="optimization"
+                        leftSection={<IconSettings size={16} />}
+                      >
+                        结构优化
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="decision"
+                        leftSection={<IconChartDots size={16} />}
+                      >
+                        方案决策
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="scenario"
+                        leftSection={<IconSwords size={16} />}
+                      >
+                        战役推演
+                      </Tabs.Tab>
                     </Tabs.List>
 
                     <Tabs.Panel value="force" pt="md">
@@ -497,6 +725,185 @@ const App: React.FC = () => {
                       <ReportExporter
                         result={result}
                         schemeName={result ? `方案_${new Date(result.timestamp).toLocaleString('zh-CN')}` : ''}
+                      />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="timeSeries" pt="md">
+                      {!timeSeriesData ? (
+                        <Stack gap="md" align="center">
+                          <Paper shadow="sm" p="xl" radius="md" withBorder>
+                            <Stack align="center" gap="md">
+                              <IconActivity size={48} color="#adb5bd" />
+                              <Text c="dimmed" ta="center">
+                                暂无时序记录数据
+                              </Text>
+                              <Text size="sm" c="dimmed" ta="center">
+                                请先配置参数，然后点击下方按钮运行高级仿真生成时序数据
+                              </Text>
+                              <Button
+                                onClick={runAdvancedSimulation}
+                                loading={isRunningAdvancedSimulation}
+                                disabled={!result || !hasValidParams}
+                                color="blue"
+                              >
+                                运行高级仿真
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        </Stack>
+                      ) : (
+                        <TimeSeriesPanel timeSeries={timeSeriesData} />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="terrain" pt="md">
+                      <BattlefieldTerrainPanel
+                        selectedTerrainId={selectedTerrain.id}
+                        onSelectTerrain={handleSelectTerrain}
+                      />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="mission" pt="md">
+                      <MissionGroupPanel
+                        selectedMissions={selectedMissions}
+                        onAddMission={handleAddMission}
+                        onRemoveMission={handleRemoveMission}
+                        onReorderMissions={handleReorderMissions}
+                        onClearMissions={handleClearMissions}
+                        onRunSimulation={runAdvancedSimulation}
+                        isSimulating={isRunningAdvancedSimulation}
+                        missionGroup={missionGroup}
+                      />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="damage" pt="md">
+                      {!damageEvolutionResult ? (
+                        <Stack gap="md" align="center">
+                          <Paper shadow="sm" p="xl" radius="md" withBorder>
+                            <Stack align="center" gap="md">
+                              <IconBug size={48} color="#adb5bd" />
+                              <Text c="dimmed" ta="center">
+                                暂无损伤演化数据
+                              </Text>
+                              <Text size="sm" c="dimmed" ta="center">
+                                请先配置参数，然后点击下方按钮运行高级仿真
+                              </Text>
+                              <Button
+                                onClick={runAdvancedSimulation}
+                                loading={isRunningAdvancedSimulation}
+                                disabled={!result || !hasValidParams}
+                                color="blue"
+                              >
+                                运行高级仿真
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        </Stack>
+                      ) : (
+                        <DamageEvolutionPanel damageEvolution={damageEvolutionResult} />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="playback" pt="md">
+                      {!failurePlaybackSession ? (
+                        <Stack gap="md" align="center">
+                          <Paper shadow="sm" p="xl" radius="md" withBorder>
+                            <Stack align="center" gap="md">
+                              <IconPlayerPlay size={48} color="#adb5bd" />
+                              <Text c="dimmed" ta="center">
+                                暂无失效回放数据
+                              </Text>
+                              <Text size="sm" c="dimmed" ta="center">
+                                请先配置参数，然后点击下方按钮运行高级仿真
+                              </Text>
+                              <Button
+                                onClick={runAdvancedSimulation}
+                                loading={isRunningAdvancedSimulation}
+                                disabled={!result || !hasValidParams}
+                                color="blue"
+                              >
+                                运行高级仿真
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        </Stack>
+                      ) : (
+                        <FailurePlaybackPanel playbackSession={failurePlaybackSession} />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="optimization" pt="md">
+                      {optimizationSchemes.length === 0 ? (
+                        <Stack gap="md" align="center">
+                          <Paper shadow="sm" p="xl" radius="md" withBorder>
+                            <Stack align="center" gap="md">
+                              <IconSettings size={48} color="#adb5bd" />
+                              <Text c="dimmed" ta="center">
+                                暂无结构优化方案
+                              </Text>
+                              <Text size="sm" c="dimmed" ta="center">
+                                请先配置参数，然后点击下方按钮运行高级仿真生成优化方案
+                              </Text>
+                              <Button
+                                onClick={runAdvancedSimulation}
+                                loading={isRunningAdvancedSimulation}
+                                disabled={!result || !hasValidParams}
+                                color="blue"
+                              >
+                                运行高级仿真
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        </Stack>
+                      ) : (
+                        <StructuralOptimizationPanel
+                          schemes={optimizationSchemes}
+                          selectedSchemeId={selectedSchemeId}
+                          onSchemeSelect={handleSchemeSelect}
+                          onGenerateSchemes={handleGenerateSchemes}
+                          isGenerating={isRunningAdvancedSimulation}
+                          baseParameters={parameters}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="decision" pt="md">
+                      {!multiSchemeDecisionResult ? (
+                        <Stack gap="md" align="center">
+                          <Paper shadow="sm" p="xl" radius="md" withBorder>
+                            <Stack align="center" gap="md">
+                              <IconChartDots size={48} color="#adb5bd" />
+                              <Text c="dimmed" ta="center">
+                                暂无多方案决策数据
+                              </Text>
+                              <Text size="sm" c="dimmed" ta="center">
+                                请先配置参数，然后点击下方按钮运行高级仿真生成决策评估
+                              </Text>
+                              <Button
+                                onClick={runAdvancedSimulation}
+                                loading={isRunningAdvancedSimulation}
+                                disabled={!result || !hasValidParams}
+                                color="blue"
+                              >
+                                运行高级仿真
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        </Stack>
+                      ) : (
+                        <MultiSchemeDecisionPanel
+                          decisionResult={multiSchemeDecisionResult}
+                          onRunDecision={handleRunDecision}
+                          isRunning={isRunningAdvancedSimulation}
+                          schemes={optimizationSchemes}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="scenario" pt="md">
+                      <CombatScenarioPanel
+                        onSelectConfiguration={handleApplyScenarioConfig}
+                        onSelectTerrain={handleApplyScenarioTerrain}
                       />
                     </Tabs.Panel>
                   </Tabs>

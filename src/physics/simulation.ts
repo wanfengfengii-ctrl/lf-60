@@ -38,7 +38,7 @@ function calculateMomentOfInertia(width: number, height: number): number {
   return (width * Math.pow(height, 3)) / 12;
 }
 
-function calculateBendingStress(
+export function calculateBendingStress(
   force: number,
   spokeLength: number,
   width: number,

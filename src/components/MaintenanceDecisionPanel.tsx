@@ -187,25 +187,28 @@ const MaintenanceDecisionPanel: React.FC<MaintenanceDecisionPanelProps> = ({ res
   ].filter((d) => d.value > 0);
 
   const recommendedPlan = dataRec.plans.find((p) => p.id === dataRec.recommendedPlanId);
-  const reasonText = recommendedPlan?.name === dataPlan.name
-    ? '为最佳性价比选择，综合考虑安全性与经济性平衡'
-    : '可作为备选参考，综合考虑不同维护策略';
+  const isViewingRecommended = recommendedPlan?.id === dataPlan.id;
 
   return (
     <Stack gap="md">
       <Alert
-        color={planTypeColor[dataPlan.planType] as any}
-        title="💡 系统推荐"
+        color={recommendedPlan ? (planTypeColor[recommendedPlan.planType] as any) : 'blue'}
+        title={isViewingRecommended ? '💡 系统推荐（当前查看）' : '💡 系统推荐'}
         icon={<IconStar size={20} />}
         withCloseButton={false}
       >
-        <Group gap="sm" wrap="nowrap">
+        <Stack gap={4}>
           <Text size="sm">
             基于当前故障状态（{result.diagnosisResult?.overallFaultLevel}级），系统推荐采用
-            <Text component="span" fw={700}>「{dataPlan.name}」</Text>
-            。该方案{reasonText}。
+            <Text component="span" fw={700}>「{recommendedPlan?.name}」</Text>
+            。该方案为最佳性价比选择，综合考虑安全性与经济性平衡。
           </Text>
-        </Group>
+          {!isViewingRecommended && (
+            <Text size="xs" c="dimmed">
+              （您当前正在查看备选方案：{dataPlan.name}）
+            </Text>
+          )}
+        </Stack>
       </Alert>
 
       <SimpleGrid cols={{ base: 1, md: 4 }} spacing="md">

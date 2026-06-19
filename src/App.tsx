@@ -26,6 +26,13 @@ import {
   IconFileExport,
   IconStethoscope,
   IconTool,
+  IconCalendar,
+  IconClock,
+  IconUsers,
+  IconPackage,
+  IconDashboard,
+  IconGauge,
+  IconFileText,
 } from '@tabler/icons-react';
 import ControlPanel from './components/ControlPanel';
 import Wheel3DView from './components/Wheel3DView';
@@ -36,7 +43,15 @@ import ComparisonView from './components/ComparisonView';
 import ReportExporter from './components/ReportExporter';
 import FaultDiagnosisPanel from './components/FaultDiagnosisPanel';
 import MaintenanceDecisionPanel from './components/MaintenanceDecisionPanel';
+import WheelServicePhasePanel from './components/WheelServicePhasePanel';
+import HistoricalFaultArchive from './components/HistoricalFaultArchive';
+import MaintenanceSchedulePanel from './components/MaintenanceSchedulePanel';
+import LifePredictionPanel from './components/LifePredictionPanel';
+import ResourceSchedulingPanel from './components/ResourceSchedulingPanel';
+import SparePartsAnalysisPanel from './components/SparePartsAnalysisPanel';
+import FleetOperationDashboard from './components/FleetOperationDashboard';
 import { runSimulation, validateParameters } from './physics/simulation';
+import { generateAllFleetData } from './physics/fleetManagement';
 import {
   WheelParameters,
   SimulationResult,
@@ -53,7 +68,8 @@ const App: React.FC = () => {
   const [previousExceededCount, setPreviousExceededCount] = useState<number>(-1);
   const [isLoadingScheme, setIsLoadingScheme] = useState(false);
   const [schemes, setSchemes] = useState<SavedScheme[]>([]);
-  const [activeTab, setActiveTab] = useState<string>('force');
+  const [activeTab, setActiveTab] = useState<string | null>('force');
+  const [fleetData, setFleetData] = useState<any>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -64,6 +80,9 @@ const App: React.FC = () => {
         setSchemes([]);
       }
     }
+
+    const fleet = generateAllFleetData();
+    setFleetData(fleet);
   }, []);
 
   const updateSchemes = useCallback((newSchemes: SavedScheme[]) => {
@@ -335,6 +354,48 @@ const App: React.FC = () => {
                         维修决策
                       </Tabs.Tab>
                       <Tabs.Tab
+                        value="service"
+                        leftSection={<IconGauge size={16} />}
+                      >
+                        服役管理
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="faults"
+                        leftSection={<IconFileText size={16} />}
+                      >
+                        故障档案
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="schedule"
+                        leftSection={<IconCalendar size={16} />}
+                      >
+                        养护排程
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="life"
+                        leftSection={<IconClock size={16} />}
+                      >
+                        寿命预测
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="resources"
+                        leftSection={<IconUsers size={16} />}
+                      >
+                        资源调度
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="spareparts"
+                        leftSection={<IconPackage size={16} />}
+                      >
+                        备件分析
+                      </Tabs.Tab>
+                      <Tabs.Tab
+                        value="fleet"
+                        leftSection={<IconDashboard size={16} />}
+                      >
+                        车队看板
+                      </Tabs.Tab>
+                      <Tabs.Tab
                         value="comparison"
                         leftSection={<IconArrowsLeftRight size={16} />}
                       >
@@ -362,6 +423,70 @@ const App: React.FC = () => {
 
                     <Tabs.Panel value="maintenance" pt="md">
                       <MaintenanceDecisionPanel result={result} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="service" pt="md">
+                      {fleetData && (
+                        <WheelServicePhasePanel
+                          wheels={fleetData.wheels}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="faults" pt="md">
+                      {fleetData && (
+                        <HistoricalFaultArchive
+                          faults={fleetData.faults}
+                          patterns={fleetData.faultPatterns}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="schedule" pt="md">
+                      {fleetData && (
+                        <MaintenanceSchedulePanel
+                          schedule={fleetData.maintenanceSchedule}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="life" pt="md">
+                      {fleetData && (
+                        <LifePredictionPanel
+                          predictions={fleetData.lifePredictions}
+                          wheels={fleetData.wheels}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="resources" pt="md">
+                      {fleetData && (
+                        <ResourceSchedulingPanel
+                          technicians={fleetData.technicians}
+                          equipment={fleetData.equipment}
+                          schedules={fleetData.resourceSchedules}
+                          tasks={fleetData.maintenanceTasks}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="spareparts" pt="md">
+                      {fleetData && (
+                        <SparePartsAnalysisPanel
+                          spareParts={fleetData.spareParts}
+                          consumptions={fleetData.sparePartConsumptions}
+                          analyses={fleetData.sparePartAnalyses}
+                        />
+                      )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="fleet" pt="md">
+                      {fleetData && (
+                        <FleetOperationDashboard
+                          fleetData={fleetData.fleetOperationData}
+                          vehicles={fleetData.fleet.vehicles}
+                        />
+                      )}
                     </Tabs.Panel>
 
                     <Tabs.Panel value="comparison" pt="md">

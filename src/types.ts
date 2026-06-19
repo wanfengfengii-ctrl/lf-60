@@ -376,3 +376,307 @@ export interface MaintenanceComparison {
     after: number;
   }[];
 }
+
+export type ServicePhase = 'new' | 'running_in' | 'normal_service' | 'wear_period' | 'critical' | 'retired';
+
+export interface ServicePhaseRecord {
+  id: string;
+  phase: ServicePhase;
+  startedAt: number;
+  endedAt?: number;
+  mileage: number;
+  cycles: number;
+  notes: string;
+}
+
+export interface WheelIdentity {
+  id: string;
+  serialNumber: string;
+  vehicleId: string;
+  fleetId: string;
+  manufactureDate: number;
+  installationDate: number;
+  materialId: string;
+  spokeCount: number;
+  wheelRadius: number;
+}
+
+export interface WheelServiceRecord {
+  identity: WheelIdentity;
+  currentPhase: ServicePhase;
+  phaseHistory: ServicePhaseRecord[];
+  totalMileage: number;
+  totalCycles: number;
+  maintenanceCount: number;
+  repairCount: number;
+  totalCost: number;
+  currentHealthScore: number;
+  lastInspectionDate: number;
+  nextInspectionDate: number;
+  position: 'front_left' | 'front_right' | 'rear_left' | 'rear_right';
+}
+
+export const SERVICE_PHASE_LABELS: Record<ServicePhase, string> = {
+  new: '全新',
+  running_in: '磨合期',
+  normal_service: '正常服役',
+  wear_period: '磨损期',
+  critical: '临界状态',
+  retired: '已报废',
+};
+
+export const SERVICE_PHASE_COLORS: Record<ServicePhase, string> = {
+  new: 'blue',
+  running_in: 'cyan',
+  normal_service: 'green',
+  wear_period: 'yellow',
+  critical: 'orange',
+  retired: 'gray',
+};
+
+export interface FaultRecord {
+  id: string;
+  wheelId: string;
+  vehicleId: string;
+  fleetId: string;
+  faultType: FaultType;
+  severity: FaultSeverity;
+  detectedAt: number;
+  repairedAt?: number;
+  description: string;
+  rootCause?: string;
+  repairAction?: string;
+  repairCost: number;
+  downtimeHours: number;
+  mileageAtFault: number;
+  cyclesAtFault: number;
+  roadCondition: string;
+  weatherCondition?: string;
+  operatorNotes?: string;
+}
+
+export interface FaultPatternAnalysis {
+  faultType: FaultType;
+  totalCount: number;
+  averageRepairCost: number;
+  averageDowntime: number;
+  mostCommonSeverity: FaultSeverity;
+  highRiskPeriods: { startMileage: number; endMileage: number; count: number }[];
+  seasonalTrends: { season: string; count: number }[];
+}
+
+export interface MaintenanceTask {
+  id: string;
+  wheelId: string;
+  vehicleId: string;
+  fleetId: string;
+  taskType: 'inspection' | 'preventive' | 'corrective' | 'overhaul';
+  title: string;
+  description: string;
+  scheduledDate: number;
+  dueDate: number;
+  completedDate?: number;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  estimatedDurationHours: number;
+  actualDurationHours?: number;
+  assignedTechnician?: string;
+  requiredParts: { partId: string; partName: string; quantity: number }[];
+  costEstimate: number;
+  actualCost?: number;
+  notes?: string;
+}
+
+export interface MaintenanceSchedule {
+  tasks: MaintenanceTask[];
+  weeklySchedule: { date: number; tasks: MaintenanceTask[] }[];
+  monthlySummary: {
+    totalTasks: number;
+    completedTasks: number;
+    overdueTasks: number;
+    estimatedCost: number;
+    actualCost: number;
+  };
+}
+
+export const MAINTENANCE_TASK_TYPE_LABELS: Record<MaintenanceTask['taskType'], string> = {
+  inspection: '例行检查',
+  preventive: '预防性维护',
+  corrective: '故障维修',
+  overhaul: '大修',
+};
+
+export interface LifePredictionPoint {
+  cycles: number;
+  predictedHealthScore: number;
+  lowerBound: number;
+  upperBound: number;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface Warning {
+  id: string;
+  wheelId: string;
+  vehicleId: string;
+  type: 'health' | 'life' | 'maintenance' | 'spare_parts' | 'resource';
+  level: 'info' | 'warning' | 'critical';
+  message: string;
+  triggeredAt: number;
+  acknowledged: boolean;
+  acknowledgedAt?: number;
+  acknowledgedBy?: string;
+}
+
+export interface LifePredictionResult {
+  wheelId: string;
+  currentHealthScore: number;
+  predictedRemainingCycles: number;
+  predictedRemainingMileage: number;
+  predictedEndOfLifeDate: number;
+  confidenceInterval: { lower: number; upper: number };
+  predictionCurve: LifePredictionPoint[];
+  warnings: Warning[];
+  keyFactors: { factor: string; impact: number; description: string }[];
+  recommendations: string[];
+}
+
+export interface Technician {
+  id: string;
+  name: string;
+  skillLevel: 'junior' | 'intermediate' | 'senior' | 'expert';
+  specialties: string[];
+  hourlyRate: number;
+  available: boolean;
+  currentWorkload: number;
+}
+
+export interface Equipment {
+  id: string;
+  name: string;
+  type: string;
+  available: boolean;
+  maintenanceSchedule: { date: number; description: string }[];
+}
+
+export interface ResourceAllocation {
+  taskId: string;
+  technicianId: string;
+  equipmentIds: string[];
+  startTime: number;
+  endTime: number;
+  status: 'planned' | 'in_progress' | 'completed' | 'cancelled';
+}
+
+export interface ResourceSchedule {
+  date: number;
+  allocations: ResourceAllocation[];
+  totalAvailableHours: number;
+  totalAllocatedHours: number;
+  utilizationRate: number;
+}
+
+export const TECHNICIAN_SKILL_LABELS: Record<Technician['skillLevel'], string> = {
+  junior: '初级',
+  intermediate: '中级',
+  senior: '高级',
+  expert: '专家',
+};
+
+export interface SparePart {
+  id: string;
+  name: string;
+  category: 'spoke' | 'hub' | 'rim' | 'fastener' | 'material' | 'tool' | 'other';
+  unit: string;
+  unitCost: number;
+  currentStock: number;
+  minimumStock: number;
+  maximumStock: number;
+  leadTimeDays: number;
+  supplier: string;
+  lastRestockDate?: number;
+}
+
+export interface SparePartConsumption {
+  id: string;
+  partId: string;
+  partName: string;
+  quantity: number;
+  usedAt: number;
+  usedIn: string;
+  wheelId?: string;
+  vehicleId?: string;
+  cost: number;
+}
+
+export interface SparePartAnalysis {
+  partId: string;
+  partName: string;
+  totalConsumed: number;
+  totalCost: number;
+  monthlyConsumption: { month: string; quantity: number; cost: number }[];
+  predictedConsumption: { month: string; predictedQuantity: number }[];
+  turnoverRate: number;
+  stockOutRisk: 'low' | 'medium' | 'high';
+  costOptimizationPotential: number;
+}
+
+export const SPARE_PART_CATEGORY_LABELS: Record<SparePart['category'], string> = {
+  spoke: '轮辐',
+  hub: '轮毂',
+  rim: '轮辋',
+  fastener: '紧固件',
+  material: '材料',
+  tool: '工具',
+  other: '其他',
+};
+
+export interface Vehicle {
+  id: string;
+  name: string;
+  fleetId: string;
+  type: string;
+  wheels: WheelServiceRecord[];
+  totalMileage: number;
+  lastMaintenanceDate: number;
+  nextMaintenanceDate: number;
+  status: 'active' | 'maintenance' | 'idle' | 'retired';
+  healthScore: number;
+}
+
+export interface Fleet {
+  id: string;
+  name: string;
+  description: string;
+  vehicles: Vehicle[];
+  totalWheels: number;
+  activeWheels: number;
+  wheelsInMaintenance: number;
+  wheelsRetired: number;
+  totalMaintenanceCost: number;
+  averageHealthScore: number;
+}
+
+export interface FleetKPI {
+  totalWheels: number;
+  activeWheels: number;
+  wheelsInMaintenance: number;
+  averageHealthScore: number;
+  healthDistribution: { level: string; count: number; percentage: number }[];
+  monthlyMaintenanceCost: number;
+  yearlyMaintenanceCost: number;
+  averageCostPerWheel: number;
+  failureRate: number;
+  meanTimeToRepair: number;
+  availabilityRate: number;
+  criticalWarnings: number;
+  upcomingMaintenanceTasks: number;
+  sparePartsStockValue: number;
+}
+
+export interface FleetOperationData {
+  fleet: Fleet;
+  kpi: FleetKPI;
+  topIssues: { wheelId: string; vehicleName: string; issue: string; severity: FaultSeverity }[];
+  costTrend: { month: string; maintenanceCost: number; sparePartsCost: number }[];
+  availabilityTrend: { month: string; availabilityRate: number }[];
+}
